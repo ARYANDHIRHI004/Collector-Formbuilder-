@@ -112,6 +112,8 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  packages/db: {}
+
   packages/eslint-config:
     devDependencies:
       '@eslint/js':
