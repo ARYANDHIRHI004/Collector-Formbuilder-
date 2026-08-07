@@ -18,6 +18,7 @@
     "@hugeicons/react": "^1.1.9",
     "@shadcn/react": "^0.2.0",
     "@workspace/ui": "workspace:*",
+    "@workspace/auth": "workspace:*",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
     "embla-carousel-react": "^8.6.0",
