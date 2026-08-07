@@ -2,7 +2,7 @@ import {z} from "zod";
 import dotenv from "dotenv";
 
 dotenv.config({
-    path:"../.env"
+    path:".env"
 })
 
 function validateEnvironment(env: NodeJS.ProcessEnv ) {
@@ -16,5 +16,7 @@ function validateEnvironment(env: NodeJS.ProcessEnv ) {
 
     return envirnoment.parse(env)
 }
+
+console.log(process.env.PORT)
 
 export const env = validateEnvironment(process.env)

@@ -4,10 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": "./dist/client.js",
+    "./server": "./dist/auth.js"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,6 +13,8 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",
+    "better-auth": "^1.6.25",
+    "drizzle-orm": "^0.45.2",
     "@workspace/db": "workspace:*",
     "@trpc/client": "^11.5.1",
     "@trpc/react-query": "^11.5.1",

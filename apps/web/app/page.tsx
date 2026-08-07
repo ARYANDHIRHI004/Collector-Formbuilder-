@@ -1,11 +1,34 @@
-import {Button } from "@workspace/ui/components/button"
+"use client"
+import { loginWithGoogle } from "@/lib/auth-client"
+import { authClient} from "@workspace/auth" // import the auth client
 
-export default function Page() {
+import React from 'react'
+
+
+const page = () => {
+
+  const handleLogin = async () => {
+    loginWithGoogle()
+    console.log("signed in")
+  }
+
+  const { 
+        data: session, 
+        isPending, //loading state
+        error, //error object
+        refetch //refetch the session
+    } = authClient.useSession() 
   return (
-    <div className="bg-amber-400">
-      <Button>
-        aryan
-      </Button>
+    <div>
+      {
+        isPending ? "Loading..." : session ? "Signed in as " + session.user.email : "Not signed in"
+      }
+        <button  type="button" onClick={handleLogin}>
+          login with google
+        </button>
+      
     </div>
   )
 }
+
+export default page

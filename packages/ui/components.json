@@ -1,4 +1,4 @@
-{
+p{
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "radix-mira",
   "rsc": true,

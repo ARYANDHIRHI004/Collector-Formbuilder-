@@ -3,5 +3,8 @@ import { defineConfig } from 'drizzle-kit';
 export default defineConfig({
   out: './drizzle',
   schema: './schema',
-  dialect: 'postgresql',  
+  dialect: 'postgresql',
+  dbCredentials: {
+    url: "postgress://myuser:mypassword@localhost:5432/collector"
+  },
 });
