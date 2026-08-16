@@ -19,7 +19,6 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${fontMono.variable} ${inter.variable} antialiased`}>
-        
           {children}
       </body>
     </html>

@@ -25,6 +25,7 @@ export function createAuth({ db, baseURL, secret, GOOGLE_CLIENT_ID, GOOGLE_CLIEN
     baseURL,
 
     secret,
+    trustedOrigins: ["http://localhost:3000"],
 
 
     socialProviders: {
