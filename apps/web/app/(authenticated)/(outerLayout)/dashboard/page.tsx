@@ -12,6 +12,7 @@ import {
   Clock,
 } from "lucide-react";
 import Sidebar, { c } from "@/components/SideBar";
+import Link from "next/link";
 
 interface Stat {
   label: string;
@@ -118,13 +119,14 @@ function TopBar() {
             className="border rounded-md pl-9 pr-3 py-2 text-sm w-52 placeholder:text-[#6B6660]"
           />
         </div>
-        <button
+        <Link
+          href="/create-form"
           style={{ backgroundColor: c.orange, color: "#0A0A0B" }}
           className="flex items-center gap-1.5 text-sm font-semibold rounded-md px-3.5 py-2 hover:brightness-110 transition-all"
         >
           <Plus size={15} />
           New form
-        </button>
+        </Link>
         <div
           style={{ backgroundColor: c.surface2, borderColor: c.border, color: c.text }}
           className="w-8 h-8 rounded-full border flex items-center justify-center text-xs font-medium"
@@ -277,7 +279,7 @@ function FormsList() {
 
 export default function FormForgeDashboard() {
   return (
-    <div style={{ backgroundColor: c.bg, minHeight: "100vh" }} className="w-full flex">
+    <div style={{ backgroundColor: c.bg, minHeight: "100vh" }} className="w-full flex ">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
         * { font-family: 'Inter', sans-serif; }

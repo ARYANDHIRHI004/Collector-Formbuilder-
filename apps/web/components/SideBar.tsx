@@ -67,7 +67,7 @@ export default function Sidebar({
   return (
     <aside
       style={{ borderColor: c.border, backgroundColor: c.surface }}
-      className="hidden md:flex flex-col w-60 shrink-0 border-r h-screen sticky top-0 px-4 py-5"
+      className="hidden md:flex flex-col w-60 shrink-0 border-r h-screen  top-0 px-4 py-5"
     >
       <div className="flex items-center gap-2 px-2 mb-8">
         <div style={{ backgroundColor: c.orange }} className="w-7 h-7 rounded-md flex items-center justify-center">
