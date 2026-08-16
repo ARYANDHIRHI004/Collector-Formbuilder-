@@ -13,12 +13,14 @@ const app = express();
 
 const PORT = +(env.PORT ?? 4000);
 app.use(cors({
-  origin: "http://localhost:3000",
-  credentials: true,
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  allowedHeaders: "Content-Type, Authorization",
+    origin: ["http://localhost:3000", "*"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.all("/api/auth/{*any}", toNodeHandler(auth));
+
+app.post("/api/auth/{*any}", toNodeHandler(auth));
+app.get("/api/auth/{*any}", toNodeHandler(auth));
 
 app.use(express.json());
 app.use(express.urlencoded());

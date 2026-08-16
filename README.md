@@ -6,10 +6,6 @@ FormForge is a modern, no-code form builder that enables individuals and teams t
 
 ## ✨ Features
 
-### Authentication & Organizations
-
-* Clerk Authentication
-* Clerk Organizations
 * Organization switching
 * Role-based access control
 * Protected routes
