@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
-  const token = request.cookies.get("token")?.value;
+  const token = request.cookies.get("better-auth.session_token")?.value;
+  const pathname = request.nextUrl.pathname;
 
-  if (!token) {
+  // Logged-in user trying to access login
+  if ((pathname === "/login" || pathname === "/" )&& token) {
+    return NextResponse.redirect(
+      new URL("/dashboard", request.url)
+    );
+  }
+
+  // Protected routes
+  if (
+    !token &&
+    (
+      pathname.startsWith("/dashboard") ||
+      pathname.startsWith("/forms") ||
+      pathname.startsWith("/responses")
+    )
+  ) {
     const loginUrl = new URL("/login", request.url);
 
-    // Optional: send the user back after login
-    loginUrl.searchParams.set(
-      "callbackUrl",
-      request.nextUrl.pathname
-    );
+    loginUrl.searchParams.set("callbackUrl", pathname);
 
     return NextResponse.redirect(loginUrl);
   }
@@ -23,5 +35,7 @@ export const config = {
     "/dashboard/:path*",
     "/forms/:path*",
     "/responses/:path*",
+    "/login",
+    "/",
   ],
 };
