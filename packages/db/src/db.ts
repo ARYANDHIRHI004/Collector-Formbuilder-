@@ -6,6 +6,8 @@ export function createDb(connectionString: string) {
   const client = postgres(connectionString);
 
   return drizzle(client, {
-    schema
+    schema,
   });
 }
+
+export type Db = ReturnType<typeof createDb>;

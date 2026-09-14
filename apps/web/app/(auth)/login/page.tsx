@@ -66,8 +66,8 @@ function GraphTexture() {
       style={{ opacity: 0.35 }}
     >
       {edges.map(([a, b], i) => {
-        const f = nodes[a];
-        const t = nodes[b];
+        const f = nodes[a]!;
+        const t = nodes[b]!;
         const mx = (f.x + t.x) / 2;
         return (
           <path
@@ -90,10 +90,14 @@ export default function FormForgeSignIn() {
   const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [email, setEmail] = useState("");
 
-    const handleLogin = async () => {
-      loginWithGoogle()
-      console.log("signed in")
+  const handleLogin = async () => {
+    setLoadingGoogle(true);
+    try {
+      await loginWithGoogle();
+    } finally {
+      setLoadingGoogle(false);
     }
+  };
   
 
   return (

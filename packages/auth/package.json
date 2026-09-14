@@ -9,7 +9,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-     "build": "tsup"
+    "build": "tsc"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.2",
@@ -27,6 +27,7 @@
     "typescript": "^5.9.2"
   },
   "devDependencies": {
+    "@types/node": "^22.15.3",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "typescript": "^5.9.2"

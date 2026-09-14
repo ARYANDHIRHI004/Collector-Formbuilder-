@@ -1,14 +1,10 @@
-// routers/index.ts
-
-import {router} from "@workspace/trpc";
-import { proRouter } from "../modules/pro.js";
-
-// import { formRouter } from "./form.router";
-// import { submissionRouter } from "./submission.router";
+import { router } from "@workspace/trpc";
+import { formRouter } from "../modules/form/form.router.js";
+import { submissionRouter } from "../modules/submission/submission.router.js";
 
 export const appRouter = router({
-    form: proRouter,
-    // submission: submissionRouter,
+  form: formRouter,
+  submission: submissionRouter,
 });
 
 export type AppRouter = typeof appRouter;

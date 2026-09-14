@@ -11,7 +11,9 @@
  *   import "@xyflow/react/dist/style.css";
  */
 
-import React, { useCallback, useRef, useState, useEffect } from "react";
+import React, { Suspense, useCallback, useRef, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { trpc } from "@/lib/trpc";
 import type { DragEvent } from "react";
 import {
   ReactFlow,
@@ -47,6 +49,7 @@ import {
   Trash2,
   Plus,
   X,
+  Loader2,
 } from "lucide-react";
 import { c } from "@/components/SideBar";
 import Link from "next/link";
@@ -164,31 +167,8 @@ const nodeTypes: NodeTypes = { field: FieldNode };
 /*  Starting canvas — a small demo flow so the page isn't blank         */
 /* ------------------------------------------------------------------ */
 
-const initialNodes: FormFieldNode[] = [
-  {
-    id: "n1",
-    type: "field",
-    position: { x: 260, y: 40 },
-    data: { fieldType: "email", label: "Email address", required: true, placeholder: "you@company.com" },
-  },
-  {
-    id: "n2",
-    type: "field",
-    position: { x: 260, y: 190 },
-    data: { fieldType: "phone", label: "Phone number", required: false, placeholder: "+91 98765 43210" },
-  },
-  {
-    id: "n3",
-    type: "field",
-    position: { x: 260, y: 340 },
-    data: { fieldType: "rating", label: "Rate your experience", required: true },
-  },
-];
-
-const initialEdges: Edge[] = [
-  { id: "e1-2", source: "n1", target: "n2", type: "smoothstep" },
-  { id: "e2-3", source: "n2", target: "n3", type: "smoothstep" },
-];
+const emptyNodes: FormFieldNode[] = [];
+const emptyEdges: Edge[] = [];
 
 /* ------------------------------------------------------------------ */
 /*  Left panel — draggable field palette                               */
@@ -364,13 +344,83 @@ function PropertiesPanel({ node, onChange, onDelete }: PropertiesPanelProps) {
 /* ------------------------------------------------------------------ */
 
 function BuilderInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const formId = searchParams.get("id");
+  const creatingRef = useRef(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [nodes, setNodes, onNodesChange] = useNodesState<FormFieldNode>(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState<FormFieldNode>(emptyNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(emptyEdges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [formName, setFormName] = useState<string>("Customer intake");
+  const [formName, setFormName] = useState<string>("Untitled form");
   const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [hydrated, setHydrated] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
   const { screenToFlowPosition } = useReactFlow();
+  const utils = trpc.useUtils();
+
+  const formQuery = trpc.form.get.useQuery(
+    { id: formId! },
+    { enabled: !!formId },
+  );
+
+  const createForm = trpc.form.create.useMutation({
+    onSuccess: ({ id }) => {
+      router.replace(`/create-form?id=${id}`);
+    },
+  });
+
+  const updateForm = trpc.form.update.useMutation({
+    onSuccess: () => {
+      setSaveStatus("saved");
+      utils.form.list.invalidate();
+    },
+    onError: () => setSaveStatus("error"),
+  });
+
+  const publishForm = trpc.form.publish.useMutation({
+    onSuccess: () => {
+      setStatus("published");
+      utils.form.list.invalidate();
+      utils.form.get.invalidate({ id: formId! });
+    },
+  });
+
+  useEffect(() => {
+    if (!formId && !creatingRef.current) {
+      creatingRef.current = true;
+      createForm.mutate({ name: "Untitled form" });
+    }
+  }, [formId]);
+
+  useEffect(() => {
+    if (!formQuery.data || hydrated) return;
+
+    setFormName(formQuery.data.form.name);
+    setStatus(formQuery.data.form.status as "draft" | "published");
+    setNodes((formQuery.data.version?.nodes as FormFieldNode[]) ?? []);
+    setEdges((formQuery.data.version?.edges as Edge[]) ?? []);
+    setHydrated(true);
+  }, [formQuery.data, hydrated, setNodes, setEdges]);
+
+  useEffect(() => {
+    if (!formId || !hydrated) return;
+
+    setSaveStatus("saving");
+    const timer = setTimeout(() => {
+      updateForm.mutate({
+        id: formId,
+        name: formName,
+        nodes,
+        edges,
+      });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [formId, formName, nodes, edges, hydrated]);
+
+  const isLoading =
+    !formId || createForm.isPending || (formQuery.isLoading && !hydrated);
 
   // Keep edges in sync when a node is removed (canvas delete key, panel delete, etc.)
   useEffect(() => {
@@ -430,6 +480,17 @@ function BuilderInner() {
     setSelectedId(null);
   }, [selectedId, setNodes]);
 
+  if (isLoading) {
+    return (
+      <div
+        style={{ backgroundColor: c.bg }}
+        className="w-full h-screen flex items-center justify-center"
+      >
+        <Loader2 size={32} color={c.orange} className="animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div style={{ backgroundColor: c.bg }} className="w-full h-screen flex flex-col">
       <style>{`
@@ -475,7 +536,11 @@ function BuilderInner() {
 
         <div className="flex items-center gap-2 shrink-0">
           <span style={{ color: c.muted }} className="text-xs hidden sm:inline mr-1">
-            Autosaved
+            {saveStatus === "saving"
+              ? "Saving…"
+              : saveStatus === "error"
+                ? "Save failed"
+                : "Saved"}
           </span>
           <button
             style={{ borderColor: c.border, color: c.text }}
@@ -485,11 +550,12 @@ function BuilderInner() {
             Preview
           </button>
           <button
-            onClick={() => setStatus("published")}
+            onClick={() => formId && publishForm.mutate({ id: formId })}
+            disabled={!formId || publishForm.isPending}
             style={{ backgroundColor: c.orange, color: "#0A0A0B" }}
-            className="rounded-md px-4 py-1.5 text-sm font-semibold hover:brightness-110 transition-all"
+            className="rounded-md px-4 py-1.5 text-sm font-semibold hover:brightness-110 transition-all disabled:opacity-60"
           >
-            Publish
+            {publishForm.isPending ? "Publishing…" : "Publish"}
           </button>
         </div>
       </div>
@@ -531,10 +597,27 @@ function BuilderInner() {
   );
 }
 
-export default function FormForgeCreateForm() {
+function CreateFormPage() {
   return (
     <ReactFlowProvider>
       <BuilderInner />
     </ReactFlowProvider>
+  );
+}
+
+export default function FormForgeCreateForm() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          style={{ backgroundColor: c.bg }}
+          className="w-full h-screen flex items-center justify-center"
+        >
+          <Loader2 size={32} color={c.orange} className="animate-spin" />
+        </div>
+      }
+    >
+      <CreateFormPage />
+    </Suspense>
   );
 }

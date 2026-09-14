@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   FileText,
@@ -17,38 +17,18 @@ import {
   Archive,
   ExternalLink,
   Pencil,
+  Loader2,
 } from "lucide-react";
 import Sidebar, { c } from "@/components/SideBar";
+import Link from "next/link";
+import { trpc } from "@/lib/trpc";
+import { formatRelativeDate } from "@/lib/format-date";
 
 type FormStatus = "published" | "draft";
 type FormFilter = "all" | FormStatus;
 type ViewMode = "grid" | "list";
 type SortKey = "recent" | "responses" | "name";
 
-interface FormSummary {
-  id: string;
-  name: string;
-  status: FormStatus;
-  responses: number;
-  fields: number;
-  edited: string;
-  editedTs: number;
-}
-
-const forms: FormSummary[] = [
-  { id: "f1", name: "Customer intake", status: "published", responses: 342, fields: 9, edited: "2 hours ago", editedTs: 9 },
-  { id: "f2", name: "Event RSVP — Q3 launch", status: "published", responses: 118, fields: 6, edited: "Yesterday", editedTs: 8 },
-  { id: "f3", name: "Job application — Design", status: "draft", responses: 0, fields: 14, edited: "3 days ago", editedTs: 6 },
-  { id: "f4", name: "Product feedback survey", status: "published", responses: 596, fields: 5, edited: "1 week ago", editedTs: 4 },
-  { id: "f5", name: "Internal onboarding checklist", status: "draft", responses: 0, fields: 11, edited: "1 week ago", editedTs: 4 },
-  { id: "f6", name: "Support request", status: "published", responses: 228, fields: 4, edited: "2 weeks ago", editedTs: 3 },
-  { id: "f7", name: "Vendor registration", status: "draft", responses: 0, fields: 8, edited: "3 weeks ago", editedTs: 2 },
-  { id: "f8", name: "NPS check-in — August", status: "published", responses: 74, fields: 3, edited: "1 month ago", editedTs: 1 },
-];
-
-/* Mini node-graph thumbnail, deterministic per card — the same
-   signature motif from the landing page, scaled down to a glance-sized
-   preview of the form's own shape. */
 function MiniGraph({ seed, accent }: { seed: number; accent: boolean }) {
   const base = [
     { x: 8, y: 26 },
@@ -67,8 +47,8 @@ function MiniGraph({ seed, accent }: { seed: number; accent: boolean }) {
   return (
     <svg viewBox="0 0 96 52" width="96" height="52" aria-hidden="true">
       {edges.map(([a, b], i) => {
-        const f = nodes[a];
-        const t = nodes[b];
+        const f = nodes[a]!;
+        const t = nodes[b]!;
         const mx = (f.x + t.x) / 2;
         return (
           <path
@@ -109,14 +89,30 @@ function StatusPill({ status }: { status: FormStatus }) {
   );
 }
 
-function ActionMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ActionMenu({
+  open,
+  onClose,
+  formId,
+  slug,
+  status,
+}: {
+  open: boolean;
+  onClose: () => void;
+  formId: string;
+  slug: string;
+  status: FormStatus;
+}) {
   if (!open) return null;
-  const items: { icon: LucideIcon; label: string; danger?: boolean }[] = [
-    { icon: Pencil, label: "Edit" },
-    { icon: ExternalLink, label: "View live form" },
+
+  const items: { icon: LucideIcon; label: string; danger?: boolean; href?: string }[] = [
+    { icon: Pencil, label: "Edit", href: `/create-form?id=${formId}` },
+    ...(status === "published"
+      ? [{ icon: ExternalLink, label: "View live form", href: `/f/${slug}` }]
+      : []),
     { icon: Copy, label: "Duplicate" },
     { icon: Archive, label: "Archive", danger: true },
   ];
+
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
@@ -124,30 +120,60 @@ function ActionMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
         style={{ borderColor: c.border, backgroundColor: c.surface2 }}
         className="absolute right-0 top-8 z-20 w-44 border rounded-lg py-1.5 shadow-xl"
       >
-        {items.map(({ icon: Icon, label, danger }) => (
-          <button
-            key={label}
-            style={{ color: danger ? "#F87171" : c.text }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left"
-          >
-            <Icon size={14} color={danger ? "#F87171" : c.muted} />
-            {label}
-          </button>
-        ))}
+        {items.map(({ icon: Icon, label, danger, href }) =>
+          href ? (
+            <Link
+              key={label}
+              href={href}
+              onClick={onClose}
+              style={{ color: danger ? "#F87171" : c.text }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left"
+            >
+              <Icon size={14} color={danger ? "#F87171" : c.muted} />
+              {label}
+            </Link>
+          ) : (
+            <button
+              key={label}
+              style={{ color: danger ? "#F87171" : c.text }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-white/5 transition-colors text-left"
+            >
+              <Icon size={14} color={danger ? "#F87171" : c.muted} />
+              {label}
+            </button>
+          ),
+        )}
       </div>
     </>
   );
 }
 
-function FormCard({ form, index }: { form: FormSummary; index: number }) {
+function FormCard({
+  form,
+  index,
+}: {
+  form: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    responseCount: number;
+    updatedAt: Date | string;
+  };
+  index: number;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const status = form.status as FormStatus;
+
   return (
     <div
       style={{ borderColor: c.border, backgroundColor: c.surface }}
       className="border rounded-xl p-5 hover:border-white/20 transition-colors relative"
     >
       <div className="flex items-start justify-between mb-4">
-        <MiniGraph seed={index} accent={form.status === "published"} />
+        <Link href={`/create-form?id=${form.id}`}>
+          <MiniGraph seed={index} accent={status === "published"} />
+        </Link>
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
@@ -156,70 +182,94 @@ function FormCard({ form, index }: { form: FormSummary; index: number }) {
           >
             <MoreHorizontal size={16} color={c.muted} />
           </button>
-          <ActionMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+          <ActionMenu
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            formId={form.id}
+            slug={form.slug}
+            status={status}
+          />
         </div>
       </div>
 
-      <h3
-        style={{ fontFamily: "Space Grotesk, sans-serif", color: c.text }}
-        className="text-sm font-medium mb-2 truncate"
-      >
-        {form.name}
-      </h3>
+      <Link href={`/create-form?id=${form.id}`}>
+        <h3
+          style={{ fontFamily: "Space Grotesk, sans-serif", color: c.text }}
+          className="text-sm font-medium mb-2 truncate"
+        >
+          {form.name}
+        </h3>
+      </Link>
 
       <div className="flex items-center gap-2 mb-4">
-        <StatusPill status={form.status} />
-        <span style={{ color: c.muted }} className="text-xs">
-          {form.fields} fields
-        </span>
+        <StatusPill status={status} />
       </div>
 
       <div style={{ borderColor: c.border }} className="border-t pt-3 flex items-center justify-between">
         <span style={{ color: c.text, fontFamily: "JetBrains Mono, monospace" }} className="text-xs">
-          {form.responses.toLocaleString()} responses
+          {form.responseCount.toLocaleString()} responses
         </span>
         <span style={{ color: c.muted }} className="flex items-center gap-1 text-xs">
           <Clock size={11} />
-          {form.edited}
+          {formatRelativeDate(form.updatedAt)}
         </span>
       </div>
     </div>
   );
 }
 
-function FormRow({ form }: { form: FormSummary }) {
+function FormRow({
+  form,
+}: {
+  form: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    responseCount: number;
+    updatedAt: Date | string;
+  };
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const status = form.status as FormStatus;
+
   return (
     <div
       style={{ borderColor: c.border }}
-      className="grid grid-cols-2 sm:grid-cols-[1fr_120px_100px_100px_140px_40px] gap-4 items-center border-b px-5 py-4 hover:bg-white/[0.03] transition-colors last:border-b-0"
+      className="grid grid-cols-2 sm:grid-cols-[1fr_120px_100px_140px_40px] gap-4 items-center border-b px-5 py-4 hover:bg-white/[0.03] transition-colors last:border-b-0"
     >
-      <div className="flex items-center gap-3 col-span-2 sm:col-span-1">
-        <div style={{ backgroundColor: c.surface2, borderColor: c.border }} className="w-8 h-8 rounded-md border flex items-center justify-center shrink-0">
+      <Link href={`/create-form?id=${form.id}`} className="flex items-center gap-3 col-span-2 sm:col-span-1">
+        <div
+          style={{ backgroundColor: c.surface2, borderColor: c.border }}
+          className="w-8 h-8 rounded-md border flex items-center justify-center shrink-0"
+        >
           <FileText size={14} color={c.orange} />
         </div>
         <span style={{ color: c.text }} className="text-sm font-medium truncate">
           {form.name}
         </span>
-      </div>
+      </Link>
       <div>
-        <StatusPill status={form.status} />
+        <StatusPill status={status} />
       </div>
       <span style={{ color: c.text }} className="text-sm">
-        {form.responses.toLocaleString()}
-      </span>
-      <span style={{ color: c.muted }} className="text-sm">
-        {form.fields}
+        {form.responseCount.toLocaleString()}
       </span>
       <span style={{ color: c.muted }} className="flex items-center gap-1.5 text-xs">
         <Clock size={12} />
-        {form.edited}
+        {formatRelativeDate(form.updatedAt)}
       </span>
       <div className="relative text-right">
         <button onClick={() => setMenuOpen((v) => !v)} aria-label="Form actions">
           <MoreHorizontal size={16} color={c.muted} />
         </button>
-        <ActionMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+        <ActionMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          formId={form.id}
+          slug={form.slug}
+          status={status}
+        />
       </div>
     </div>
   );
@@ -227,23 +277,35 @@ function FormRow({ form }: { form: FormSummary }) {
 
 function EmptyState({ filter }: { filter: FormFilter }) {
   return (
-    <div style={{ borderColor: c.border, backgroundColor: c.surface }} className="border rounded-xl py-16 text-center">
-      <div style={{ backgroundColor: c.surface2, borderColor: c.border }} className="w-11 h-11 rounded-lg border flex items-center justify-center mx-auto mb-4">
+    <div
+      style={{ borderColor: c.border, backgroundColor: c.surface }}
+      className="border rounded-xl py-16 text-center"
+    >
+      <div
+        style={{ backgroundColor: c.surface2, borderColor: c.border }}
+        className="w-11 h-11 rounded-lg border flex items-center justify-center mx-auto mb-4"
+      >
         <FileText size={18} color={c.muted} />
       </div>
-      <p style={{ color: c.text, fontFamily: "Space Grotesk, sans-serif" }} className="text-sm font-medium mb-1">
+      <p
+        style={{ color: c.text, fontFamily: "Space Grotesk, sans-serif" }}
+        className="text-sm font-medium mb-1"
+      >
         No {filter === "all" ? "" : filter} forms yet
       </p>
       <p style={{ color: c.muted }} className="text-sm mb-5">
-        {filter === "draft" ? "Forms you haven't published will show up here." : "Create your first form to get started."}
+        {filter === "draft"
+          ? "Forms you haven't published will show up here."
+          : "Create your first form to get started."}
       </p>
-      <button
+      <Link
+        href="/create-form"
         style={{ backgroundColor: c.orange, color: "#0A0A0B" }}
         className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-md px-4 py-2 hover:brightness-110 transition-all"
       >
         <Plus size={15} />
         New form
-      </button>
+      </Link>
     </div>
   );
 }
@@ -254,14 +316,20 @@ export default function FormForgeForms() {
   const [sort, setSort] = useState<SortKey>("recent");
   const [query, setQuery] = useState<string>("");
 
-  const filtered = forms
-    .filter((f) => filter === "all" || f.status === filter)
-    .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => {
-      if (sort === "recent") return b.editedTs - a.editedTs;
-      if (sort === "responses") return b.responses - a.responses;
-      return a.name.localeCompare(b.name);
-    });
+  const { data: forms = [], isLoading } = trpc.form.list.useQuery();
+
+  const filtered = useMemo(() => {
+    return forms
+      .filter((f) => filter === "all" || f.status === filter)
+      .filter((f) => f.name.toLowerCase().includes(query.toLowerCase()))
+      .sort((a, b) => {
+        if (sort === "recent") {
+          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        }
+        if (sort === "responses") return b.responseCount - a.responseCount;
+        return a.name.localeCompare(b.name);
+      });
+  }, [forms, filter, query, sort]);
 
   return (
     <div style={{ backgroundColor: c.bg, minHeight: "100vh" }} className="w-full flex">
@@ -273,13 +341,19 @@ export default function FormForgeForms() {
       <Sidebar active="Forms" />
 
       <div className="flex-1 min-w-0">
-        <div style={{ borderColor: c.border }} className="flex flex-wrap items-center justify-between gap-4 border-b px-6 md:px-8 py-4">
+        <div
+          style={{ borderColor: c.border }}
+          className="flex flex-wrap items-center justify-between gap-4 border-b px-6 md:px-8 py-4"
+        >
           <div>
-            <h1 style={{ fontFamily: "Space Grotesk, sans-serif", color: c.text }} className="text-xl font-semibold tracking-tight">
+            <h1
+              style={{ fontFamily: "Space Grotesk, sans-serif", color: c.text }}
+              className="text-xl font-semibold tracking-tight"
+            >
               Forms
             </h1>
             <p style={{ color: c.muted }} className="text-sm">
-              {forms.length} forms across Acme Studio
+              {forms.length} forms
             </p>
           </div>
 
@@ -294,13 +368,14 @@ export default function FormForgeForms() {
                 className="border rounded-md pl-9 pr-3 py-2 text-sm w-48 sm:w-56 placeholder:text-[#6B6660]"
               />
             </div>
-            <button
+            <Link
+              href="/create-form"
               style={{ backgroundColor: c.orange, color: "#0A0A0B" }}
               className="flex items-center gap-1.5 text-sm font-semibold rounded-md px-3.5 py-2 hover:brightness-110 transition-all"
             >
               <Plus size={15} />
               New form
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -334,7 +409,11 @@ export default function FormForgeForms() {
                   <option value="responses">Most responses</option>
                   <option value="name">Name (A–Z)</option>
                 </select>
-                <ChevronDown size={13} color={c.muted} className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <ChevronDown
+                  size={13}
+                  color={c.muted}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                />
               </div>
 
               <div style={{ borderColor: c.border }} className="flex items-center border rounded-md overflow-hidden">
@@ -358,7 +437,11 @@ export default function FormForgeForms() {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center py-20">
+              <Loader2 size={28} color={c.muted} className="animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
             <EmptyState filter={filter} />
           ) : view === "grid" ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -367,15 +450,17 @@ export default function FormForgeForms() {
               ))}
             </div>
           ) : (
-            <div style={{ borderColor: c.border, backgroundColor: c.surface }} className="border rounded-xl overflow-hidden">
+            <div
+              style={{ borderColor: c.border, backgroundColor: c.surface }}
+              className="border rounded-xl overflow-hidden"
+            >
               <div
                 style={{ borderColor: c.border, color: c.muted }}
-                className="hidden sm:grid grid-cols-[1fr_120px_100px_100px_140px_40px] gap-4 border-b px-5 py-3 text-xs font-medium"
+                className="hidden sm:grid grid-cols-[1fr_120px_100px_140px_40px] gap-4 border-b px-5 py-3 text-xs font-medium"
               >
                 <span>Name</span>
                 <span>Status</span>
                 <span>Responses</span>
-                <span>Fields</span>
                 <span>Last edited</span>
                 <span />
               </div>
